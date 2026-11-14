@@ -22,30 +22,40 @@ type Progress = {
   reviewed: boolean[][];
   answers: number[][];
   practices: boolean[];
+  checkpoints: number[][];
+  plans: string[];
 };
-const STORAGE_KEY = "mittragen-offener-kurs-beta-v2";
+const STORAGE_KEY = "mittragen-offener-kurs-beta-v3";
+const PREVIOUS_V2 = "mittragen-offener-kurs-beta-v2";
 const PREVIOUS_KEY = "mittragen-offener-kurs-beta-v1";
 
 const blankProgress = (): Progress => ({
   reviewed: COURSE.map((module) => module.lessons.map(() => false)),
   answers: COURSE.map((module) => module.quiz.map(() => -1)),
   practices: COURSE.map(() => false),
+  checkpoints: COURSE.map(m => m.lessons.map(() => -1)),
+  plans: COURSE.map(() => ""),
 });
 
-function restoreProgress(raw: unknown): Progress {
+function restoreProgress(raw: unknown, legacy = false): Progress {
   const blank = blankProgress();
   if (!raw || typeof raw !== "object") return blank;
   const stored = raw as Partial<Progress>;
   return {
     reviewed: blank.reviewed.map((lessons, m) =>
-      lessons.map((_, v) => stored.reviewed?.[m]?.[v] === true)),
+      lessons.map((_, v) => !(legacy && m===0) && stored.reviewed?.[m]?.[v] === true)),
     answers: blank.answers.map((questions, m) =>
       questions.map((_, q) => {
-        const answer = stored.answers?.[m]?.[q];
+        const answer = legacy && m === 0 ? -1 : stored.answers?.[m]?.[q];
         return typeof answer === "number" && Number.isInteger(answer) &&
           answer >= 0 && answer < COURSE[m]!.quiz[q]!.options.length ? answer : -1;
       })),
     practices: blank.practices.map((_, m) => stored.practices?.[m] === true),
+    checkpoints: blank.checkpoints.map((entries,m)=>entries.map((_,i)=>{
+      const value = stored.checkpoints?.[m]?.[i];
+      return typeof value === "number" && value >= 0 && value <= 2 ? value : -1;
+    })),
+    plans: blank.plans.map((_,m)=>typeof stored.plans?.[m] === "string" ? stored.plans[m]!.slice(0,2500) : ""),
   };
 }
 function correctCount(progress: Progress, index: number) {
@@ -63,8 +73,9 @@ function CoursePage() {
 
   useEffect(() => {
     try {
-      const saved = window.localStorage.getItem(STORAGE_KEY) ?? window.localStorage.getItem(PREVIOUS_KEY);
-      if (saved) setProgress(restoreProgress(JSON.parse(saved)));
+      const current = window.localStorage.getItem(STORAGE_KEY);
+      const saved = current ?? window.localStorage.getItem(PREVIOUS_V2) ?? window.localStorage.getItem(PREVIOUS_KEY);
+      if (saved) setProgress(restoreProgress(JSON.parse(saved), current === null));
     } catch { /* Browser-Speicher ist optional. */ }
     setHydrated(true);
   }, []);
@@ -102,6 +113,13 @@ function CoursePage() {
         index === m ? entries.map((value, i) => i === q ? choice : value) : entries),
     }));
   };
+  const answerCheckpoint = (m:number,step:number,choice:number) => {
+    setProgress(old=>({...old,checkpoints:old.checkpoints.map((entries,index)=>index===m?
+      entries.map((answer,i)=>i===step?choice:answer):entries)}));
+  };
+  const savePlan = (m:number,text:string) => {
+    setProgress(old=>({...old,plans:old.plans.map((entry,i)=>i===m?text.slice(0,2500):entry)}));
+  };
   const resetQuiz = (m: number) => {
     setProgress(old => ({
       ...old,
@@ -134,7 +152,7 @@ function CoursePage() {
         <h1 className="mt-2 text-[clamp(2rem,5vw,3.5rem)] font-semibold leading-[1.1] tracking-[-.045em]">Wissen. Mitdenken. <span className="text-[#c94e28]">Mittragen.</span></h1>
         <p className="mt-4 text-sm leading-7 text-[#5d6871] sm:text-base">
           Alle sechs Module sind für deine Freunde zum Ausprobieren frei. Ohne Anmeldung, ohne Bezahlung und ohne Freischaltung.
-          Die Avatar-Videos entstehen noch. Schon jetzt kannst du das Wissen der einzelnen Lerneinheiten lesen, Tom und Lena begleiten, praktische Schritte lernen und die Kontrollfragen testen.
+          Die Avatar-Videos entstehen noch. Du kannst trotzdem alle Lektionen lesen, Entscheidungen an Tom und Lenas Alltag üben, praktische Schritte lernen und die Tests ausprobieren.
         </p>
         <p className="mt-3 text-sm font-medium text-[#162639]">
           Hier lernst du als Mann, konkrete Verantwortung zu übernehmen. Deine Partnerin muss dich dabei nicht unterrichten oder kontrollieren.
@@ -220,6 +238,7 @@ function CoursePage() {
             </p>
             <h3 className="mt-2 text-2xl font-semibold tracking-tight">{lesson.title}</h3>
             <p className="mt-3 text-sm leading-7 text-[#657079]">{lesson.objective}</p>
+            {lesson.durationMinutes && <p className="mt-2 text-xs font-medium text-[#aa502d]">Geplante Avatar-Länge: ca. {lesson.durationMinutes} Minuten · Lesefassung jetzt testen</p>}
 
             {lesson.videoSrc && !videoErrors[lesson.videoSrc] ?
               <video key={lesson.videoSrc} controls playsInline preload="metadata"
@@ -249,12 +268,39 @@ function CoursePage() {
             <div className="mt-7 rounded-xl bg-[#f5efe7] p-5 sm:p-6">
               <div className="flex items-center gap-2 text-[#af4b2a]"><MessageCircle size={18}/><p className="text-xs font-semibold uppercase tracking-widest">Tom & Lena · Beispielsituation</p></div>
               <p className="mt-4 text-sm leading-7">{lesson.scene}</p>
-              <div className="mt-5 space-y-3">
-                <p className="border-l-2 border-[#c94e28] pl-4 text-sm leading-6"><strong>Tom:</strong> „{lesson.tom}“</p>
-                <p className="border-l-2 border-[#aaa08e] pl-4 text-sm leading-6"><strong>Lena:</strong> „{lesson.lena}“</p>
-              </div>
-              <p className="mt-6 border-t border-[#dcd0c4] pt-4 text-sm leading-7"><strong>Sprecher:</strong> {lesson.narrator}</p>
+              {lesson.dialogue && lesson.dialogue.length > 0 ? <div className="mt-5 space-y-3">
+                {lesson.dialogue.map((line,i)=><p key={i} className={"rounded-r-md border-l-[3px] px-4 py-3 text-sm leading-7 " +
+                  (line.speaker==="Tom"?"border-[#c94e28] bg-[#fffaf4]":line.speaker==="Lena"?"border-[#72869a] bg-white":"border-[#bfa78b] bg-[#eee6dc]")}>
+                  <strong>{line.speaker}:</strong> {line.speaker==="Sprecher"?line.text:`„${line.text}“`}
+                </p>)}
+              </div> : <>
+                <div className="mt-5 space-y-3">
+                  <p className="border-l-2 border-[#c94e28] pl-4 text-sm leading-6"><strong>Tom:</strong> „{lesson.tom}“</p>
+                  <p className="border-l-2 border-[#aaa08e] pl-4 text-sm leading-6"><strong>Lena:</strong> „{lesson.lena}“</p>
+                </div>
+                <p className="mt-6 border-t border-[#dcd0c4] pt-4 text-sm leading-7"><strong>Sprecher:</strong> {lesson.narrator}</p>
+              </>}
             </div>
+
+            {lesson.challenge && <fieldset className="mt-6 rounded-xl border-2 border-[#e5c4b0] bg-[#fff8f3] p-5 sm:p-6">
+              <legend className="px-2 text-xs font-semibold uppercase tracking-widest text-[#a94325]">Dein Lerncheck · nur für dich</legend>
+              <p className="text-sm font-semibold leading-7">{lesson.challenge.prompt}</p>
+              <div className="mt-4 grid gap-2">{lesson.challenge.options.map((option,choice)=>{
+                const selected = progress.checkpoints[activeModule]?.[activeStep] ?? -1;
+                const isCorrect = selected === lesson.challenge!.correct;
+                return <label key={option} className={"flex min-h-12 cursor-pointer items-start gap-3 rounded-lg border px-3 py-3 text-sm leading-6 " +
+                  (selected===choice ? isCorrect?"border-[#68a37c] bg-[#eaf5ee]":"border-[#cc8c6c] bg-[#fce9df]":"border-[#e2d8cb] bg-white hover:border-[#c94e28]")}>
+                  <input type="radio" checked={selected===choice} name={`checkpoint-${activeModule}-${activeStep}`}
+                    onChange={()=>answerCheckpoint(activeModule,activeStep,choice)} className="mt-1 h-4 w-4 shrink-0 accent-[#c94e28]"/>
+                  <span>{option}</span>
+                </label>;
+              })}</div>
+              {(progress.checkpoints[activeModule]?.[activeStep] ?? -1) >= 0 && <p role="status" className="mt-4 text-sm leading-7">
+                <strong>{progress.checkpoints[activeModule]?.[activeStep] === lesson.challenge.correct?"Richtig!":"Noch nicht ganz."}</strong>
+                {" "}{progress.checkpoints[activeModule]?.[activeStep] === lesson.challenge.correct?
+                  lesson.challenge.explanation:"Überlege, welche Aufgabe du selbst übernehmen kannst und wo fachlicher Rat wichtig ist. Du darfst die Antwort ändern."}
+              </p>}
+            </fieldset>}
 
             {lesson.sources.length>0 && <div className="mt-5 rounded-lg border border-[#e4ddd2] bg-white p-4">
               <p className="text-xs font-semibold uppercase tracking-widest text-[#7a5a48]">Quellen zum Nachlesen</p>
@@ -328,6 +374,24 @@ function CoursePage() {
                 Weiter zu Modul {String(activeModule+2).padStart(2,"0")} <ArrowRight size={16}/>
               </button>}
             </div>
+          </section>}
+
+          {activeModule === 0 && <section className="rounded-2xl border border-[#e2dad0] bg-white p-5 sm:p-8" aria-labelledby="seven-days">
+            <p className="text-xs font-semibold uppercase tracking-widest text-[#b34829]">Deine persönliche Umsetzung</p>
+            <h3 id="seven-days" className="mt-2 text-2xl font-semibold">Mein 7-Tage-Mittrageplan</h3>
+            <p className="mt-3 text-sm leading-7 text-[#657079]">
+              Schreib deinen eigenen, konkreten Plan. Lena muss ihn nicht erstellen oder bestätigen.
+              Beantworte: Was übernehme ich? Woran erkenne ich den Bedarf? Was organisiere ich selbst? Wann prüfe ich, ob es funktioniert?
+            </p>
+            <label htmlFor="mittrageplan" className="mt-5 block text-sm font-semibold">Mein Verantwortungsbereich und meine vier Schritte</label>
+            <textarea id="mittrageplan" rows={6} maxLength={2500} value={progress.plans[activeModule] ?? ""}
+              onChange={e=>savePlan(activeModule,e.target.value)}
+              placeholder={"Ich übernehme für sieben Tage ...\nIch erkenne den Bedarf an ...\nIch plane und erledige ...\nIch kontrolliere selbst am ..."}
+              className="mt-3 w-full rounded-xl border border-[#d8d0c5] bg-[#fffcf7] p-4 text-sm leading-7 focus:outline-2 focus:outline-[#c94e28]"/>
+            <p className="mt-2 text-xs leading-6 text-[#69737b]">
+              {progress.plans[activeModule]?.trim()?"Dein Plan ist in diesem Browser gespeichert.":"Dein Plan wird beim Schreiben lokal im Browser gespeichert."}
+              {" "}Du kannst ihn später jederzeit verbessern.
+            </p>
           </section>}
 
           <section className="rounded-2xl border border-[#e2dad0] bg-[#f1e9dd] p-5 sm:p-7">
