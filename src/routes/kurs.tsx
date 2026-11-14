@@ -37,16 +37,16 @@ const blankProgress = (): Progress => ({
   plans: COURSE.map(() => ""),
 });
 
-function restoreProgress(raw: unknown): Progress {
+function restoreProgress(raw: unknown, legacy = false): Progress {
   const blank = blankProgress();
   if (!raw || typeof raw !== "object") return blank;
   const stored = raw as Partial<Progress>;
   return {
     reviewed: blank.reviewed.map((lessons, m) =>
-      lessons.map((_, v) => stored.reviewed?.[m]?.[v] === true)),
+      lessons.map((_, v) => !(legacy && m===0) && stored.reviewed?.[m]?.[v] === true)),
     answers: blank.answers.map((questions, m) =>
       questions.map((_, q) => {
-        const answer = stored.answers?.[m]?.[q];
+        const answer = legacy && m === 0 ? -1 : stored.answers?.[m]?.[q];
         return typeof answer === "number" && Number.isInteger(answer) &&
           answer >= 0 && answer < COURSE[m]!.quiz[q]!.options.length ? answer : -1;
       })),
@@ -73,8 +73,9 @@ function CoursePage() {
 
   useEffect(() => {
     try {
-      const saved = window.localStorage.getItem(STORAGE_KEY) ?? window.localStorage.getItem(PREVIOUS_V2) ?? window.localStorage.getItem(PREVIOUS_KEY);
-      if (saved) setProgress(restoreProgress(JSON.parse(saved)));
+      const current = window.localStorage.getItem(STORAGE_KEY);
+      const saved = current ?? window.localStorage.getItem(PREVIOUS_V2) ?? window.localStorage.getItem(PREVIOUS_KEY);
+      if (saved) setProgress(restoreProgress(JSON.parse(saved), current === null));
     } catch { /* Browser-Speicher ist optional. */ }
     setHydrated(true);
   }, []);
