@@ -42,13 +42,13 @@ function restoreProgress(raw: unknown): Progress {
       questions.map((_, q) => {
         const answer = stored.answers?.[m]?.[q];
         return typeof answer === "number" && Number.isInteger(answer) &&
-          answer >= 0 && answer < COURSE[m].quiz[q].options.length ? answer : -1;
+          answer >= 0 && answer < COURSE[m]!.quiz[q]!.options.length ? answer : -1;
       })),
     practices: blank.practices.map((_, m) => stored.practices?.[m] === true),
   };
 }
 function correctCount(progress: Progress, index: number) {
-  return COURSE[index].quiz.filter((question, q) =>
+  return COURSE[index]!.quiz.filter((question, q) =>
     progress.answers[index]?.[q] === question.correct).length;
 }
 const moduleIcons: LucideIcon[] = [Heart, BookOpen, MessageCircle, Heart, Baby, Heart];
@@ -73,14 +73,14 @@ function CoursePage() {
     catch { /* In privaten Browserfenstern kann Speichern gesperrt sein. */ }
   }, [progress, hydrated]);
 
-  const module = COURSE[activeModule];
+  const module = COURSE[activeModule]!;
   const quizStep = module.lessons.length;
   const onQuiz = activeStep === quizStep;
   const lesson = onQuiz ? null : module.lessons[activeStep];
   const score = correctCount(progress, activeModule);
   const passed = score === module.quiz.length;
   const completedModules = COURSE.filter((_, m) =>
-    correctCount(progress, m) === COURSE[m].quiz.length).length;
+    correctCount(progress, m) === COURSE[m]!.quiz.length).length;
 
   const selectModule = (index: number) => {
     setActiveModule(index);
@@ -152,7 +152,7 @@ function CoursePage() {
           </div>
           <nav className="mt-5 grid gap-1.5" aria-label="Alle sechs frei zugänglichen Module">
             {COURSE.map((entry,index) => {
-              const Icon = moduleIcons[index];
+              const Icon = moduleIcons[index] ?? Heart;
               const finished = correctCount(progress,index) === entry.quiz.length;
               return <button key={entry.title} type="button" onClick={()=>selectModule(index)}
                 aria-current={activeModule===index?"step":undefined}
