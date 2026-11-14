@@ -30,6 +30,7 @@
  */
 
 @theme inline {
+  --font-sans: "Outfit", ui-sans-serif, system-ui, sans-serif;
   --radius-sm: calc(var(--radius) - 4px);
   --radius-md: calc(var(--radius) - 2px);
   --radius-lg: var(--radius);
@@ -149,7 +150,19 @@
   }
 
   body {
+    font-family: "Outfit", ui-sans-serif, system-ui, sans-serif;
     background-color: var(--color-background);
     color: var(--color-foreground);
   }
 }
+
+/* The original MITTRAGEN reference uses a smooth geometric sans-serif silhouette,
+   open counters, restrained headline weight and elegant large-scale typography. */
+.mittragen-home h1, .mittragen-home h2, .mittragen-home h3 {
+  font-family: "Outfit", ui-sans-serif, system-ui, sans-serif;
+  font-weight: 600;
+  letter-spacing: -0.035em;
+}
+.mittragen-home h1 { font-weight: 600; letter-spacing: -0.045em; line-height: 1.08; }
+.mittragen-home p { letter-spacing: 0; }
+.mittragen-home nav a { font-weight: 500; }
