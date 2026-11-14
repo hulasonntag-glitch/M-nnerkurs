@@ -6,7 +6,7 @@ import {
   RefreshCcw, Video, type LucideIcon,
 } from "lucide-react";
 import { Brand } from "../components/Brand";
-import { COURSE } from "../data/course";
+import { COURSE } from "../data/professionalCourse";
 
 export const Route = createFileRoute("/kurs")({
   head: () => ({
@@ -23,7 +23,8 @@ type Progress = {
   answers: number[][];
   practices: boolean[];
 };
-const STORAGE_KEY = "mittragen-offener-kurs-beta-v1";
+const STORAGE_KEY = "mittragen-offener-kurs-beta-v2";
+const PREVIOUS_KEY = "mittragen-offener-kurs-beta-v1";
 
 const blankProgress = (): Progress => ({
   reviewed: COURSE.map((module) => module.lessons.map(() => false)),
@@ -62,7 +63,7 @@ function CoursePage() {
 
   useEffect(() => {
     try {
-      const saved = window.localStorage.getItem(STORAGE_KEY);
+      const saved = window.localStorage.getItem(STORAGE_KEY) ?? window.localStorage.getItem(PREVIOUS_KEY);
       if (saved) setProgress(restoreProgress(JSON.parse(saved)));
     } catch { /* Browser-Speicher ist optional. */ }
     setHydrated(true);
@@ -133,10 +134,10 @@ function CoursePage() {
         <h1 className="mt-2 text-[clamp(2rem,5vw,3.5rem)] font-semibold leading-[1.1] tracking-[-.045em]">Wissen. Mitdenken. <span className="text-[#c94e28]">Mittragen.</span></h1>
         <p className="mt-4 text-sm leading-7 text-[#5d6871] sm:text-base">
           Alle sechs Module sind für deine Freunde zum Ausprobieren frei. Ohne Anmeldung, ohne Bezahlung und ohne Freischaltung.
-          Die Avatar-Videos entstehen noch. Solange kannst du die Szenen mit Tom und Lena lesen und alle Kontrollfragen testen.
+          Die Avatar-Videos entstehen noch. Schon jetzt kannst du das Wissen der einzelnen Lerneinheiten lesen, Tom und Lena begleiten, praktische Schritte lernen und die Kontrollfragen testen.
         </p>
         <p className="mt-3 text-sm font-medium text-[#162639]">
-          Der Kurs und jede Kontrollfrage richten sich an dich als Mann. Lena muss nichts für dich lösen oder überprüfen.
+          Hier lernst du als Mann, konkrete Verantwortung zu übernehmen. Deine Partnerin muss dich dabei nicht unterrichten oder kontrollieren.
         </p>
       </div>
 
@@ -188,7 +189,7 @@ function CoursePage() {
             <p className="mt-3 text-sm text-[#e6e9ed]">{module.subtitle}</p>
             <p className="mt-5 max-w-2xl text-sm leading-7 text-white/80">{module.intro}</p>
             <div className="mt-6 flex flex-wrap items-center gap-x-6 gap-y-2 text-xs text-white/80">
-              <span className="inline-flex items-center gap-2"><Film size={15}/>{module.lessons.length} Avatar-Szenen</span>
+              <span className="inline-flex items-center gap-2"><Film size={15}/>{module.lessons.length} Lerneinheiten</span>
               <span className="inline-flex items-center gap-2"><ClipboardCheck size={15}/>{module.quiz.length} Fragen nur für dich</span>
               <span className="inline-flex items-center gap-2"><CheckCircle2 size={15}/>{score} von {module.quiz.length} richtig</span>
             </div>
@@ -202,7 +203,7 @@ function CoursePage() {
                   className={"min-h-14 rounded-xl border px-3 py-3 text-left text-xs font-semibold leading-5 transition-colors " +
                     (activeStep===i?"border-[#162639] bg-[#162639] text-white":"border-[#e0d8ce] bg-white hover:border-[#c94e28]")}>
                   <span className="mr-2 inline-flex align-middle">{progress.reviewed[activeModule]?.[i] ? <CheckCircle2 size={15}/> : <PlayCircle size={15}/>}</span>
-                  Video {i+1}
+                  Einheit {i+1}
                 </button>)}
               <button type="button" onClick={()=>setActiveStep(quizStep)}
                 aria-current={onQuiz?"step":undefined}
@@ -215,7 +216,7 @@ function CoursePage() {
 
           {lesson && <section key={activeModule+"-"+activeStep} className="rounded-2xl border border-[#e2dad0] bg-white p-5 sm:p-8">
             <p className="text-xs font-semibold uppercase tracking-[.16em] text-[#c4532b]">
-              VIDEO {activeStep+1} VON {module.lessons.length}
+              LERNEINHEIT {activeStep+1} VON {module.lessons.length}
             </p>
             <h3 className="mt-2 text-2xl font-semibold tracking-tight">{lesson.title}</h3>
             <p className="mt-3 text-sm leading-7 text-[#657079]">{lesson.objective}</p>
@@ -236,6 +237,15 @@ function CoursePage() {
                 </p>
               </div>}
 
+            <div className="mt-7 rounded-xl border border-[#e1d8cd] bg-[#fffdf9] p-5 sm:p-7">
+              <div className="flex items-center gap-2"><BookOpen size={20} className="text-[#c94e28]"/><h4 className="text-xl font-semibold tracking-tight">Das musst du wissen</h4></div>
+              <p className="mt-2 text-xs leading-6 text-[#707a82]">Verständlich erklärt. Quellen am Ende der Lerneinheit. Die Gesundheitsthemen sind redaktionelle Beta-Inhalte und ersetzen keine fachliche Beratung.</p>
+              <ul className="mt-5 space-y-4">{lesson.knowledge.map((fact,i)=><li key={i} className="flex gap-3 text-sm leading-7"><Check size={16} className="mt-[5px] shrink-0 text-[#c94e28]"/><span>{fact}</span></li>)}</ul>
+            </div>
+            <div className="mt-5 rounded-xl border border-[#e1d8cd] bg-[#f9f4ed] p-5 sm:p-7">
+              <h4 className="text-lg font-semibold">So setzt du das selbst um</h4>
+              <ol className="mt-4 space-y-3">{lesson.steps.map((step,i)=><li key={i} className="flex gap-3 text-sm leading-7"><span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-[#162639] text-xs text-white">{i+1}</span><span>{step}</span></li>)}</ol>
+            </div>
             <div className="mt-7 rounded-xl bg-[#f5efe7] p-5 sm:p-6">
               <div className="flex items-center gap-2 text-[#af4b2a]"><MessageCircle size={18}/><p className="text-xs font-semibold uppercase tracking-widest">Tom & Lena · Beispielsituation</p></div>
               <p className="mt-4 text-sm leading-7">{lesson.scene}</p>
@@ -246,6 +256,12 @@ function CoursePage() {
               <p className="mt-6 border-t border-[#dcd0c4] pt-4 text-sm leading-7"><strong>Sprecher:</strong> {lesson.narrator}</p>
             </div>
 
+            {lesson.sources.length>0 && <div className="mt-5 rounded-lg border border-[#e4ddd2] bg-white p-4">
+              <p className="text-xs font-semibold uppercase tracking-widest text-[#7a5a48]">Quellen zum Nachlesen</p>
+              <ul className="mt-2 space-y-2">{lesson.sources.map(source=><li key={source.url} className="text-xs leading-6">
+                <a href={source.url} target="_blank" rel="noopener noreferrer" className="font-medium text-[#ad4627] underline underline-offset-4">{source.label}</a>
+              </li>)}</ul>
+            </div>}
             <div className="mt-6 border-l-[3px] border-[#c94e28] bg-[#fdf8f2] p-4">
               <p className="text-xs font-semibold uppercase tracking-widest text-[#b34829]">Dein nächster Schritt</p>
               <p className="mt-2 text-sm leading-7">{lesson.hisAction}</p>
@@ -254,11 +270,11 @@ function CoursePage() {
               <button type="button" onClick={()=>markReviewed(activeModule,activeStep)}
                 disabled={progress.reviewed[activeModule]?.[activeStep]}
                 className="inline-flex min-h-11 items-center gap-2 rounded-lg border border-[#d6cec4] bg-[#fffdf9] px-4 py-2 text-xs font-semibold disabled:border-[#b7d5b6] disabled:bg-[#eef6ee] disabled:text-[#317047]">
-                <Check size={16}/> {progress.reviewed[activeModule]?.[activeStep]?"Szene gelesen ✓":"Szene als gelesen markieren"}
+                <Check size={16}/> {progress.reviewed[activeModule]?.[activeStep]?"Einheit bearbeitet ✓":"Einheit als gelesen markieren"}
               </button>
               <button type="button" onClick={()=>setActiveStep(activeStep<quizStep-1?activeStep+1:quizStep)}
                 className="inline-flex min-h-11 items-center gap-2 rounded-lg bg-[#c94e28] px-4 py-2 text-xs font-semibold text-white hover:bg-[#a94222]">
-                {activeStep===quizStep-1?"Zum Modultest":"Nächste Szene"} <ArrowRight size={16}/>
+                {activeStep===quizStep-1?"Zum Modultest":"Nächste Einheit"} <ArrowRight size={16}/>
               </button>
             </div>
           </section>}
