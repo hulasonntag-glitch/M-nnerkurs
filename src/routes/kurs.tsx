@@ -1,321 +1,343 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
-import { ArrowLeft, ArrowRight, Check, CheckCircle2, Circle, LockKeyhole, Play, Video } from "lucide-react";
+import {
+  ArrowLeft, ArrowRight, Baby, BookOpen, Check, CheckCircle2, ChevronRight,
+  Circle, ClipboardCheck, Film, Heart, LockOpen, MessageCircle, PlayCircle,
+  RefreshCcw, Video, type LucideIcon,
+} from "lucide-react";
 import { Brand } from "../components/Brand";
+import { COURSE } from "../data/course";
 
 export const Route = createFileRoute("/kurs")({
   head: () => ({
     meta: [
-      { title: "MITTRAGEN – Dein Kurs" },
-      { name: "description", content: "Schau ein Video, beantworte die dazugehörigen Kontrollfragen und gehe zum nächsten. MITTRAGEN – Der Männerkurs." },
+      { title: "MITTRAGEN – Dein offener Männerkurs" },
+      { name: "description", content: "Alle sechs Module offen testen: Avatar-Szenen mit Tom und Lena, Kontrollfragen für ihn und praktische Alltagsaufgaben. Ohne Anmeldung." },
     ],
   }),
   component: CoursePage,
 });
 
-type Question = { prompt: string; options: string[]; correct: number; explanation: string };
-type Lesson = { title: string; src: string; questions: Question[]; hasPlan?: boolean };
 type Progress = {
-  watched: boolean[];
+  reviewed: boolean[][];
   answers: number[][];
-  plan: string;
-  taskDone: boolean;
+  practices: boolean[];
 };
+const STORAGE_KEY = "mittragen-offener-kurs-beta-v1";
 
-const LESSONS: Lesson[] = [
-  {
-    title: "Willkommen",
-    src: "/Modul1_Video1_Willkommen%20%282%29.mp4",
-    hasPlan: true,
-    questions: [{
-      prompt: "Was ist der Unterschied zwischen Helfen und Mittragen?",
-      options: [
-        "Beim Mittragen übernimmt er auch das Mitdenken und die Verantwortung – nicht nur das Ausführen.",
-        "Mittragen heißt, besonders viel zu erledigen, wenn sie darum bittet.",
-        "Es gibt keinen Unterschied.",
-      ],
-      correct: 0,
-      explanation: "Mittragen bedeutet, Verantwortung eigenständig zu erkennen, zu planen und zu übernehmen.",
-    }],
-  },
-  {
-    title: "Das erste Trimester",
-    src: "/Modul1_Video2_Das_erste_Trimester.mp4",
-    questions: [
-      {
-        prompt: "Warum ist sie im ersten Trimester oft so erschöpft, obwohl man noch nichts sieht?",
-        options: [
-          "Ihr Körper legt alle Organe des Babys an, baut die Plazenta und stellt sich hormonell um.",
-          "Weil die Schwangerschaft erst nach dem ersten Trimester anstrengend wird.",
-          "Weil vor allem das Gewicht des Babys schon stark belastet.",
-        ],
-        correct: 0,
-        explanation: "Die Entwicklung der Organe, der Aufbau der Plazenta und hormonelle Veränderungen kosten viel Energie.",
-      },
-      {
-        prompt: "Was ist im ersten Trimester deine wichtigste Rolle?",
-        options: [
-          "Ihre Ruhe schützen und ihr Last abnehmen.",
-          "Abwarten, bis man die Schwangerschaft deutlich sieht.",
-          "Ihr sagen, welche Aufgaben sie noch übernehmen kann.",
-        ],
-        correct: 0,
-        explanation: "Du sorgst aktiv für Ruhe und echte Entlastung, statt auf Anweisungen zu warten.",
-      },
-    ],
-  },
-  {
-    title: "Zweites und drittes Trimester",
-    src: "/Modul1_Video3_Zweites_und_drittes_Trimester.mp4",
-    questions: [
-      {
-        prompt: "Warum hat Toms Satz „Du siehst schon richtig schwanger aus“ Lena getroffen?",
-        options: [
-          "Ihr Körper verändert sich stark und viele Frauen fühlen sich darin fremd – sie brauchen Würdigung, keine Feststellung.",
-          "Weil Tom die Schwangerschaft nicht früh genug erkannt hat.",
-          "Weil man in der Schwangerschaft grundsätzlich nichts zum Körper sagen darf.",
-        ],
-        correct: 0,
-        explanation: "Wertschätzung und Einfühlungsvermögen helfen mehr als eine bloße Feststellung.",
-      },
-      {
-        prompt: "Was ist im dritten Trimester deine Rolle?",
-        options: [
-          "Das Schwere tragen, die Geburt vorbereiten und auch nachts da sein.",
-          "Bis zur Geburt abwarten und danach Aufgaben übernehmen.",
-          "Sich vor allem um die Dekoration des Kinderzimmers kümmern.",
-        ],
-        correct: 0,
-        explanation: "Praktische Entlastung, Vorbereitung und Verlässlichkeit gehören jetzt zu deiner Verantwortung.",
-      },
-    ],
-  },
-];
-
-const TITLES = [
-  "Schwangerschaft verstehen",
-  "Mental Load übernehmen",
-  "Geburt: dein Platz",
-  "Das Wochenbett",
-  "Baby-Alltag in der Praxis",
-  "Raum für sie",
-];
-const STORAGE_KEY = "mittragen-modul1-video-quiz-reihenfolge-v1";
-const TASK = "Trag alle Vorsorgetermine bis zur Geburt in deinen Kalender ein. Geh zum nächsten Termin mit, wenn sie das möchte – und übernimm ab jetzt die Planung der Termine.";
-
-const emptyProgress = (): Progress => ({
-  watched: LESSONS.map(() => false),
-  answers: LESSONS.map(l => l.questions.map(() => -1)),
-  plan: "",
-  taskDone: false,
+const blankProgress = (): Progress => ({
+  reviewed: COURSE.map((module) => module.lessons.map(() => false)),
+  answers: COURSE.map((module) => module.quiz.map(() => -1)),
+  practices: COURSE.map(() => false),
 });
 
-function sanitizeProgress(input: unknown): Progress {
-  const blank = emptyProgress();
-  if (!input || typeof input !== "object") return blank;
-  const data = input as Partial<Progress>;
-  blank.watched = blank.watched.map((_, i) => data.watched?.[i] === true);
-  blank.answers = LESSONS.map((lesson, i) =>
-    lesson.questions.map((question, q) => {
-      const value = data.answers?.[i]?.[q];
-      return typeof value === "number" && Number.isInteger(value) && value >= 0 && value < question.options.length ? value : -1;
-    }),
-  );
-  blank.plan = typeof data.plan === "string" ? data.plan.slice(0, 1500) : "";
-  blank.taskDone = data.taskDone === true;
-  return blank;
+function restoreProgress(raw: unknown): Progress {
+  const blank = blankProgress();
+  if (!raw || typeof raw !== "object") return blank;
+  const stored = raw as Partial<Progress>;
+  return {
+    reviewed: blank.reviewed.map((lessons, m) =>
+      lessons.map((_, v) => stored.reviewed?.[m]?.[v] === true)),
+    answers: blank.answers.map((questions, m) =>
+      questions.map((_, q) => {
+        const answer = stored.answers?.[m]?.[q];
+        return typeof answer === "number" && Number.isInteger(answer) &&
+          answer >= 0 && answer < COURSE[m]!.quiz[q]!.options.length ? answer : -1;
+      })),
+    practices: blank.practices.map((_, m) => stored.practices?.[m] === true),
+  };
 }
-
-function quizComplete(p: Progress, index: number): boolean {
-  const questions = LESSONS[index].questions;
-  return p.watched[index] && questions.every((q, i) => p.answers[index]?.[i] === q.correct) &&
-    (!LESSONS[index].hasPlan || p.plan.trim().length > 0);
+function correctCount(progress: Progress, index: number) {
+  return COURSE[index]!.quiz.filter((question, q) =>
+    progress.answers[index]?.[q] === question.correct).length;
 }
-function lessonUnlocked(p: Progress, index: number): boolean {
-  return index === 0 || quizComplete(p, index-1);
-}
-function moduleDone(p: Progress): boolean {
-  return LESSONS.every((_, i) => quizComplete(p, i)) && p.taskDone;
-}
-function completedStages(p: Progress): number {
-  return LESSONS.filter((_, i) => quizComplete(p, i)).length + Number(moduleDone(p));
-}
+const moduleIcons: LucideIcon[] = [Heart, BookOpen, MessageCircle, Heart, Baby, Heart];
 
 function CoursePage() {
-  const [progress, setProgress] = useState<Progress>(emptyProgress);
-  const [active, setActive] = useState(0);
-  const [planDraft, setPlanDraft] = useState("");
-  const [videoErrors, setVideoErrors] = useState<boolean[]>(LESSONS.map(() => false));
+  const [progress, setProgress] = useState<Progress>(blankProgress);
   const [hydrated, setHydrated] = useState(false);
-  const [openedModule, setOpenedModule] = useState(0);
+  const [activeModule, setActiveModule] = useState(0);
+  const [activeStep, setActiveStep] = useState(0);
+  const [videoErrors, setVideoErrors] = useState<Record<string, boolean>>({});
 
   useEffect(() => {
     try {
       const saved = window.localStorage.getItem(STORAGE_KEY);
-      const p = saved ? sanitizeProgress(JSON.parse(saved)) : emptyProgress();
-      if (!saved) {
-        // Preserve the user's previously written plan when changing course layouts.
-        p.plan = window.localStorage.getItem("mittragen-beta-wenn-dann-plan") || "";
-      }
-      setProgress(p);
-      setPlanDraft(p.plan);
-    } catch { /* Der Kurs funktioniert auch ohne lokalen Speicher. */ }
+      if (saved) setProgress(restoreProgress(JSON.parse(saved)));
+    } catch { /* Browser-Speicher ist optional. */ }
     setHydrated(true);
   }, []);
+  useEffect(() => {
+    if (!hydrated) return;
+    try { window.localStorage.setItem(STORAGE_KEY, JSON.stringify(progress)); }
+    catch { /* In privaten Browserfenstern kann Speichern gesperrt sein. */ }
+  }, [progress, hydrated]);
 
-  const update = (change: (current: Progress) => Progress) => {
-    setProgress(current => {
-      const next = change(current);
-      try { window.localStorage.setItem(STORAGE_KEY, JSON.stringify(next)); }
-      catch { /* Speicherung im Browser ist optional. */ }
-      return next;
-    });
+  const module = COURSE[activeModule]!;
+  const quizStep = module.lessons.length;
+  const onQuiz = activeStep === quizStep;
+  const lesson = onQuiz ? null : module.lessons[activeStep];
+  const score = correctCount(progress, activeModule);
+  const passed = score === module.quiz.length;
+  const completedModules = COURSE.filter((_, m) =>
+    correctCount(progress, m) === COURSE[m]!.quiz.length).length;
+
+  const selectModule = (index: number) => {
+    setActiveModule(index);
+    setActiveStep(0);
+    window.scrollTo?.({top: 0, behavior: "smooth"});
   };
-
-  const watch = (index: number) => {
-    update(p => ({ ...p, watched: p.watched.map((v, i) => i === index ? true : v) }));
+  const markReviewed = (m: number, v: number) => {
+    setProgress(old => ({
+      ...old,
+      reviewed: old.reviewed.map((entries, index) =>
+        index === m ? entries.map((seen, i) => i === v ? true : seen) : entries),
+    }));
   };
-
-  const answer = (lesson: number, question: number, choice: number) => {
-    if (!progress.watched[lesson] || !lessonUnlocked(progress,lesson)) return;
-    update(p => ({
-      ...p,
-      answers: p.answers.map((group, i) => i !== lesson ? group : group.map((v,j) => j === question ? choice : v)),
+  const answer = (m: number, q: number, choice: number) => {
+    setProgress(old => ({
+      ...old,
+      answers: old.answers.map((entries, index) =>
+        index === m ? entries.map((value, i) => i === q ? choice : value) : entries),
+    }));
+  };
+  const resetQuiz = (m: number) => {
+    setProgress(old => ({
+      ...old,
+      answers: old.answers.map((entries, index) =>
+        index === m ? entries.map(() => -1) : entries),
+    }));
+  };
+  const togglePractice = (m: number) => {
+    setProgress(old => ({
+      ...old, practices: old.practices.map((done, index) => index === m ? !done : done),
     }));
   };
 
-  const savePlan = () => {
-    if (!planDraft.trim()) return;
-    const plan = planDraft.trim();
-    update(p => ({ ...p, plan }));
-    try { window.localStorage.setItem("mittragen-beta-wenn-dann-plan", plan); } catch { /* optional */ }
-  };
-
-  const chooseLesson = (index: number) => {
-    if (lessonUnlocked(progress,index)) setActive(index);
-  };
-
-  const finished = moduleDone(progress);
-  const steps = completedStages(progress);
-  const currentLesson = LESSONS[active];
-  const currentQuizDone = quizComplete(progress, active);
-
-  return <div className="min-h-screen bg-[#F8F4EE] font-sans text-[#1B2B3C]">
-    <header className="border-b border-[#DED6CB]">
-      <div className="mx-auto flex max-w-6xl items-center justify-between gap-4 px-6 py-5">
+  return <div className="min-h-screen bg-[#faf7f0] font-sans text-[#162639]">
+    <header className="border-b border-[#ded6cb] bg-[#faf7f0]">
+      <div className="mx-auto flex max-w-6xl items-center justify-between gap-3 px-5 py-5 sm:px-8">
         <Brand />
-        <a href="/" className="inline-flex items-center gap-2 text-sm font-medium hover:underline"><ArrowLeft size={16}/> Zur Startseite</a>
+        <a href="/" className="inline-flex items-center gap-2 text-xs font-medium hover:text-[#c94e28] sm:text-sm">
+          <ArrowLeft size={16} aria-hidden="true"/> Zur Startseite
+        </a>
       </div>
     </header>
 
-    <main className="mx-auto max-w-6xl px-6 pb-24 pt-12 lg:pt-16">
-      <div>
-        <p className="text-xs font-medium uppercase tracking-[.2em] text-[#C4532B]">MITTRAGEN · DEIN KURS</p>
-        <h1 className="mt-4 text-4xl font-medium tracking-[-.045em] md:text-5xl">Wissen. Mitdenken. Mittragen.</h1>
-        <p className="mt-3 text-sm text-[#5D6871]">Video ansehen → dazugehörige Fragen beantworten → nächstes Video → Wochenaufgabe.</p>
+    <main className="mx-auto max-w-6xl px-4 pb-24 pt-9 sm:px-7 sm:pt-14">
+      <div className="mb-7 max-w-3xl sm:mb-10">
+        <span className="inline-flex items-center gap-2 border border-[#dbbca7] bg-[#f9e9d9] px-3 py-2 text-[11px] font-semibold uppercase tracking-[.13em] text-[#944123]">
+          <LockOpen size={14} aria-hidden="true"/> Offene Testphase
+        </span>
+        <p className="mt-5 text-xs font-semibold uppercase tracking-[.17em] text-[#c4532b]">MITTRAGEN · DER MÄNNERKURS</p>
+        <h1 className="mt-2 text-[clamp(2rem,5vw,3.5rem)] font-semibold leading-[1.1] tracking-[-.045em]">Wissen. Mitdenken. <span className="text-[#c94e28]">Mittragen.</span></h1>
+        <p className="mt-4 text-sm leading-7 text-[#5d6871] sm:text-base">
+          Alle sechs Module sind für deine Freunde zum Ausprobieren frei. Ohne Anmeldung, ohne Bezahlung und ohne Freischaltung.
+          Die Avatar-Videos entstehen noch. Solange kannst du die Szenen mit Tom und Lena lesen und alle Kontrollfragen testen.
+        </p>
+        <p className="mt-3 text-sm font-medium text-[#162639]">
+          Der Kurs und jede Kontrollfrage richten sich an dich als Mann. Lena muss nichts für dich lösen oder überprüfen.
+        </p>
       </div>
 
-      <div className="mt-10 grid gap-8 lg:grid-cols-[280px_minmax(0,1fr)]">
-        <aside className="self-start rounded-2xl border border-[#E2DAD0] bg-white p-5 lg:sticky lg:top-6" aria-label="Kursübersicht">
-          <div className="flex items-center justify-between"><h2 className="text-lg font-medium">Deine Module</h2><span className="text-xs text-[#68727A]">{finished ? "1" : "0"} / 6</span></div>
-          <div className="mt-4 h-1.5 overflow-hidden rounded-full bg-[#E9E3DB]"><div className="h-full bg-[#C4532B]" style={{width: finished ? "16.67%" : "0%"}}/></div>
-          <nav className="mt-5 grid gap-2">{TITLES.map((title,index) => {
-            const unlocked = index === 0 || (index === 1 && finished);
-            return <button key={title} type="button" disabled={!unlocked} aria-current={openedModule===index?"step":undefined} onClick={()=>setOpenedModule(index)}
-              className={`flex w-full items-start gap-3 rounded-xl px-3 py-3 text-left ${openedModule===index ? "bg-[#1B2B3C] text-white" : unlocked ? "hover:bg-[#F8F4EE]" : "cursor-not-allowed opacity-50"}`}>
-              <span className="text-xs text-[#C4532B]">{String(index+1).padStart(2,"0")}</span>
-              <span className="flex-1"><span className="block text-sm font-medium">{title}</span><span className="mt-1 flex items-center gap-1.5 text-xs opacity-70">{index===0 ? finished ? <><CheckCircle2 size={13}/> Geschafft</> : <><Circle size={13}/> In Bearbeitung</> : !unlocked ? <><LockKeyhole size={13}/> Gesperrt</> : <><Circle size={13}/> [folgt]</>}</span></span>
-            </button>;
-          })}</nav>
-          <p className="mt-5 border-t border-[#EAE3D9] pt-4 text-xs leading-5 text-[#69737B]">Fortschritt nur in diesem Browser. Kein Login.</p>
+      <div className="grid items-start gap-6 lg:grid-cols-[285px_minmax(0,1fr)] lg:gap-8">
+        <aside className="rounded-2xl border border-[#e2dad0] bg-white p-4 sm:p-5 lg:sticky lg:top-5" aria-label="Kursübersicht">
+          <div className="flex items-center justify-between gap-3">
+            <h2 className="text-lg font-semibold">Deine Module</h2>
+            <span className="text-xs tabular-nums text-[#657079]">{completedModules} / {COURSE.length} Tests bestanden</span>
+          </div>
+          <div className="mt-4 h-2 overflow-hidden rounded-full bg-[#ebe4dc]" role="progressbar"
+            aria-label="Bestandene Modultests" aria-valuemin={0} aria-valuemax={COURSE.length} aria-valuenow={completedModules}>
+            <div className="h-full bg-[#c94e28] transition-[width]" style={{width: (completedModules/COURSE.length*100)+"%"}}/>
+          </div>
+          <nav className="mt-5 grid gap-1.5" aria-label="Alle sechs frei zugänglichen Module">
+            {COURSE.map((entry,index) => {
+              const Icon = moduleIcons[index] ?? Heart;
+              const finished = correctCount(progress,index) === entry.quiz.length;
+              return <button key={entry.title} type="button" onClick={()=>selectModule(index)}
+                aria-current={activeModule===index?"step":undefined}
+                className={"flex w-full items-start gap-3 rounded-xl px-3 py-3 text-left transition-colors focus-visible:outline-2 focus-visible:outline-[#c94e28] " +
+                  (activeModule===index ? "bg-[#162639] text-white" : "hover:bg-[#f3eee7]")}>
+                <span className={activeModule===index?"text-[#f0a27f]":"text-[#c94e28]"}><Icon size={19} aria-hidden="true"/></span>
+                <span className="min-w-0 flex-1">
+                  <span className="block text-xs font-semibold tracking-[.10em] opacity-75">MODUL {String(index+1).padStart(2,"0")}</span>
+                  <span className="mt-1 block text-sm font-semibold leading-5">{entry.title}</span>
+                  <span className="mt-1 flex items-center gap-1.5 text-xs opacity-75">
+                    {finished ? <><CheckCircle2 size={13}/> Test bestanden</> : <><Circle size={12}/> Frei zugänglich</>}
+                  </span>
+                </span>
+                <ChevronRight size={16} className="mt-1 shrink-0 opacity-65" aria-hidden="true"/>
+              </button>;
+            })}
+          </nav>
+          <p className="mt-5 border-t border-[#eae3d9] pt-4 text-xs leading-6 text-[#69737b]">
+            <LockOpen size={13} className="mr-1 inline" aria-hidden="true"/>
+            Kein Modul ist gesperrt. Dein Testfortschritt bleibt in diesem Browser.
+          </p>
         </aside>
 
-        {openedModule > 0 ? <section className="self-start rounded-2xl border border-[#E2DAD0] bg-white p-8">
-          <p className="text-xs tracking-[.16em] text-[#C4532B]">MODUL {String(openedModule+1).padStart(2,"0")}</p>
-          <h2 className="mt-3 text-3xl font-medium">{TITLES[openedModule]}</h2>
-          <p className="mt-5 text-sm text-[#667079]">[folgt]</p>
-          <button onClick={()=>setOpenedModule(0)} className="mt-8 inline-flex items-center gap-2 text-sm underline"><ArrowLeft size={16}/> Zu Modul 1</button>
-        </section> : <div className="min-w-0 space-y-5">
-          <section className="rounded-2xl bg-[#1B2B3C] p-7 text-white md:p-9">
-            <p className="text-xs uppercase tracking-[.17em] text-[#EAA17F]">MODUL 01 VON 06</p>
-            <h2 className="mt-3 text-3xl font-medium tracking-[-.03em]">Schwangerschaft verstehen</h2>
-            <div className="mt-7 flex items-center justify-between text-xs"><span>Dein Fortschritt</span><span>{steps} von 4 Etappen</span></div>
-            <div role="progressbar" aria-label="Fortschritt in Modul 1" aria-valuenow={steps} aria-valuemax={4} aria-valuemin={0} className="mt-2 h-2 overflow-hidden rounded-full bg-white/20">
-              <div className="h-full rounded-full bg-[#E58C66]" style={{width: `${steps*25}%`}}/>
+        <div className="min-w-0 space-y-5">
+          <section className="rounded-2xl bg-[#162639] p-6 text-white sm:p-8">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <p className="text-xs font-semibold uppercase tracking-[.16em] text-[#efaa85]">MODUL {String(activeModule+1).padStart(2,"0")} VON 06</p>
+              <span className="flex items-center gap-1.5 rounded-full border border-white/25 px-3 py-1.5 text-[11px] text-white/85">
+                <LockOpen size={13}/> Für alle offen
+              </span>
+            </div>
+            <h2 className="mt-3 text-3xl font-semibold tracking-[-.035em] sm:text-4xl">{module.title}</h2>
+            <p className="mt-3 text-sm text-[#e6e9ed]">{module.subtitle}</p>
+            <p className="mt-5 max-w-2xl text-sm leading-7 text-white/80">{module.intro}</p>
+            <div className="mt-6 flex flex-wrap items-center gap-x-6 gap-y-2 text-xs text-white/80">
+              <span className="inline-flex items-center gap-2"><Film size={15}/>{module.lessons.length} Avatar-Szenen</span>
+              <span className="inline-flex items-center gap-2"><ClipboardCheck size={15}/>{module.quiz.length} Fragen nur für dich</span>
+              <span className="inline-flex items-center gap-2"><CheckCircle2 size={15}/>{score} von {module.quiz.length} richtig</span>
             </div>
           </section>
-          <div className="flex flex-wrap gap-2" aria-label="Videos in Modul 1">
-            {LESSONS.map((lesson,i) => <button key={lesson.title} type="button" onClick={()=>chooseLesson(i)} disabled={!lessonUnlocked(progress,i)}
-              className={`inline-flex min-h-10 items-center gap-2 rounded-full border px-4 py-2 text-xs font-medium ${active===i?"border-[#1B2B3C] bg-[#1B2B3C] text-white":lessonUnlocked(progress,i)?"border-[#DDD4C9] bg-white hover:border-[#C4532B]":"cursor-not-allowed border-[#E6DED4] text-[#889098]"}`}>
-              {quizComplete(progress,i) ? <CheckCircle2 size={14}/> : !lessonUnlocked(progress,i) ? <LockKeyhole size={13}/> : <Circle size={13}/>}
-              Video {i+1}: {lesson.title}
-            </button>)}
-          </div>
 
-          <section className="rounded-2xl border border-[#E2DAD0] bg-white p-6 md:p-8" aria-labelledby="video-title">
-            <p className="text-xs uppercase tracking-[.15em] text-[#C4532B]">Video {active+1} von 3</p>
-            <div className="mt-2 flex items-start justify-between gap-3">
-              <h3 id="video-title" className="text-2xl font-medium tracking-tight">{currentLesson.title}</h3>
-              {progress.watched[active]?<CheckCircle2 className="shrink-0 text-[#2E7A4A]"/>:<Video className="shrink-0 text-[#8D989D]"/>}
+          <section aria-label="Inhalte des aktuellen Moduls">
+            <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+              {module.lessons.map((entry, i) =>
+                <button key={entry.title} type="button" onClick={()=>setActiveStep(i)}
+                  aria-current={activeStep===i?"step":undefined}
+                  className={"min-h-14 rounded-xl border px-3 py-3 text-left text-xs font-semibold leading-5 transition-colors " +
+                    (activeStep===i?"border-[#162639] bg-[#162639] text-white":"border-[#e0d8ce] bg-white hover:border-[#c94e28]")}>
+                  <span className="mr-2 inline-flex align-middle">{progress.reviewed[activeModule]?.[i] ? <CheckCircle2 size={15}/> : <PlayCircle size={15}/>}</span>
+                  Video {i+1}
+                </button>)}
+              <button type="button" onClick={()=>setActiveStep(quizStep)}
+                aria-current={onQuiz?"step":undefined}
+                className={"min-h-14 rounded-xl border px-3 py-3 text-left text-xs font-semibold leading-5 transition-colors " +
+                  (onQuiz?"border-[#c94e28] bg-[#c94e28] text-white":"border-[#e0d8ce] bg-white hover:border-[#c94e28]")}>
+                <ClipboardCheck size={15} className="mr-2 inline align-middle"/> Modultest
+              </button>
             </div>
-            <video key={currentLesson.src} controls playsInline preload="metadata" className="mt-5 aspect-video w-full rounded-xl bg-[#1B2B3C]"
-              src={currentLesson.src} onEnded={()=>watch(active)}
-              onError={()=>setVideoErrors(prev=>prev.map((x,i)=>i===active?true:x))}>
-              Dein Browser unterstützt das Videoformat nicht.
-            </video>
-            {videoErrors[active] && <p role="alert" className="mt-3 rounded-lg bg-[#FFF0EF] p-4 text-sm text-[#953B31]">Das Video konnte in dieser Vorschau nicht geladen werden. Prüfe, ob Lovable den aktuellen GitHub-Stand veröffentlicht hat. <a href={currentLesson.src} className="underline underline-offset-4">Videodatei direkt öffnen</a></p>}
-            <p className="mt-4 text-xs text-[#657079]">{progress.watched[active]?"Gesehen. Die Kontrollfragen sind freigeschaltet.":"Nach dem vollständigen Abspielen erscheinen die Kontrollfragen direkt hier."}</p>
+          </section>
 
-            {progress.watched[active] && <div className="mt-7 border-t border-[#E6DED4] pt-7" aria-labelledby="questions-title">
-              <p className="text-xs uppercase tracking-[.15em] text-[#C4532B]">Kontrollfragen zu Video {active+1}</p>
-              <h4 id="questions-title" className="mt-2 text-xl font-medium">Was hast du mitgenommen?</h4>
-              <div className="mt-6 space-y-7">{currentLesson.questions.map((question, qi) => {
-                const chosen = progress.answers[active]?.[qi] ?? -1;
-                const correct = chosen === question.correct;
-                return <fieldset key={question.prompt} className="min-w-0">
-                  <legend className="text-sm font-medium leading-6">{qi+1}. {question.prompt}</legend>
-                  <div className="mt-3 grid gap-2">{question.options.map((option,i)=><label key={option}
-                    className={`flex min-h-12 items-center gap-3 rounded-xl border px-4 py-3 text-sm ${chosen===i ? correct?"border-[#4D9563] bg-[#ECF7EE]":"border-[#BD5656] bg-[#FFF0EF]":"border-[#E7DED3]"} ${correct?"opacity-90":"cursor-pointer hover:border-[#C4532B]"}`}>
-                    <input type="radio" name={`q-${active}-${qi}`} className="accent-[#C4532B]" checked={chosen===i} disabled={correct} onChange={()=>answer(active,qi,i)}/><span>{option}</span>
-                  </label>)}</div>
-                  {chosen>=0 && <p role="status" className={`mt-3 rounded-lg px-4 py-3 text-sm ${correct?"bg-[#ECF7EE] text-[#276541]":"bg-[#FFF0EF] text-[#A13636]"}`}>
-                    <strong className="font-medium">{correct?"Richtig.":"Noch nicht. Versuch es nochmal."}</strong>{correct && <span className="ml-1">{question.explanation}</span>}
+          {lesson && <section key={activeModule+"-"+activeStep} className="rounded-2xl border border-[#e2dad0] bg-white p-5 sm:p-8">
+            <p className="text-xs font-semibold uppercase tracking-[.16em] text-[#c4532b]">
+              VIDEO {activeStep+1} VON {module.lessons.length}
+            </p>
+            <h3 className="mt-2 text-2xl font-semibold tracking-tight">{lesson.title}</h3>
+            <p className="mt-3 text-sm leading-7 text-[#657079]">{lesson.objective}</p>
+
+            {lesson.videoSrc && !videoErrors[lesson.videoSrc] ?
+              <video key={lesson.videoSrc} controls playsInline preload="metadata"
+                src={lesson.videoSrc} className="mt-6 aspect-video w-full rounded-xl bg-[#162639]"
+                onEnded={()=>markReviewed(activeModule,activeStep)}
+                onError={()=>setVideoErrors(old=>({...old,[lesson.videoSrc!]:true}))}>
+                Dein Browser kann dieses Video nicht wiedergeben.
+              </video>
+              :
+              <div className="mt-6 flex aspect-video flex-col items-center justify-center rounded-xl bg-[#1a2c40] px-5 text-center text-white">
+                <Video size={38} strokeWidth={1.5} className="text-[#ef9c75]" aria-hidden="true"/>
+                <p className="mt-4 text-lg font-semibold">Avatar-Video in Vorbereitung</p>
+                <p className="mt-2 max-w-sm text-sm leading-6 text-white/75">
+                  Hier wird dein Video mit Tom und Lena abgespielt. Für die Testphase ist die Szene darunter lesbar.
+                </p>
+              </div>}
+
+            <div className="mt-7 rounded-xl bg-[#f5efe7] p-5 sm:p-6">
+              <div className="flex items-center gap-2 text-[#af4b2a]"><MessageCircle size={18}/><p className="text-xs font-semibold uppercase tracking-widest">Tom & Lena · Beispielsituation</p></div>
+              <p className="mt-4 text-sm leading-7">{lesson.scene}</p>
+              <div className="mt-5 space-y-3">
+                <p className="border-l-2 border-[#c94e28] pl-4 text-sm leading-6"><strong>Tom:</strong> „{lesson.tom}“</p>
+                <p className="border-l-2 border-[#aaa08e] pl-4 text-sm leading-6"><strong>Lena:</strong> „{lesson.lena}“</p>
+              </div>
+              <p className="mt-6 border-t border-[#dcd0c4] pt-4 text-sm leading-7"><strong>Sprecher:</strong> {lesson.narrator}</p>
+            </div>
+
+            <div className="mt-6 border-l-[3px] border-[#c94e28] bg-[#fdf8f2] p-4">
+              <p className="text-xs font-semibold uppercase tracking-widest text-[#b34829]">Dein nächster Schritt</p>
+              <p className="mt-2 text-sm leading-7">{lesson.hisAction}</p>
+            </div>
+            <div className="mt-6 flex flex-wrap items-center justify-between gap-3">
+              <button type="button" onClick={()=>markReviewed(activeModule,activeStep)}
+                disabled={progress.reviewed[activeModule]?.[activeStep]}
+                className="inline-flex min-h-11 items-center gap-2 rounded-lg border border-[#d6cec4] bg-[#fffdf9] px-4 py-2 text-xs font-semibold disabled:border-[#b7d5b6] disabled:bg-[#eef6ee] disabled:text-[#317047]">
+                <Check size={16}/> {progress.reviewed[activeModule]?.[activeStep]?"Szene gelesen ✓":"Szene als gelesen markieren"}
+              </button>
+              <button type="button" onClick={()=>setActiveStep(activeStep<quizStep-1?activeStep+1:quizStep)}
+                className="inline-flex min-h-11 items-center gap-2 rounded-lg bg-[#c94e28] px-4 py-2 text-xs font-semibold text-white hover:bg-[#a94222]">
+                {activeStep===quizStep-1?"Zum Modultest":"Nächste Szene"} <ArrowRight size={16}/>
+              </button>
+            </div>
+          </section>}
+
+          {onQuiz && <section className="rounded-2xl border border-[#e2dad0] bg-white p-5 sm:p-8" aria-labelledby="quiz-title">
+            <p className="text-xs font-semibold uppercase tracking-[.16em] text-[#c4532b]">KONTROLLFRAGEN · MODUL {String(activeModule+1).padStart(2,"0")}</p>
+            <h3 id="quiz-title" className="mt-2 text-2xl font-semibold tracking-tight sm:text-3xl">Was hast du verstanden?</h3>
+            <p className="mt-3 text-sm leading-7 text-[#657079]">
+              Diese Fragen beantwortest du selbst – nicht Lena. In der offenen Testphase kannst du den Test jederzeit starten,
+              Antworten korrigieren und wiederholen, auch wenn das Avatar-Video noch fehlt.
+            </p>
+            <div className="mt-5 flex items-center gap-3 rounded-lg bg-[#f5efe7] p-4 text-sm">
+              <ClipboardCheck size={21} className="shrink-0 text-[#c94e28]"/>
+              <span><strong>{score} / {module.quiz.length} richtig.</strong> Für den Modulabschluss müssen alle Antworten stimmen.</span>
+            </div>
+            <div className="mt-7 space-y-8">
+              {module.quiz.map((question,qi)=>{
+                const selected = progress.answers[activeModule]?.[qi] ?? -1;
+                const correct = selected === question.correct;
+                return <fieldset key={question.prompt} className="min-w-0 border-b border-[#e7dfd4] pb-7">
+                  <legend className="text-sm font-semibold leading-6">{qi+1}. {question.prompt}</legend>
+                  <div className="mt-4 grid gap-2">
+                    {question.options.map((option,choice) =>
+                      <label key={option} className={"flex min-h-12 cursor-pointer items-center gap-3 rounded-xl border px-4 py-3 text-sm leading-6 " +
+                        (selected===choice ? correct?"border-[#82ad8f] bg-[#edf6ed]":"border-[#d99a86] bg-[#fff1e9]":"border-[#e2dad0] hover:border-[#c94e28]")}>
+                        <input type="radio" className="h-4 w-4 shrink-0 accent-[#c94e28]" name={"m"+activeModule+"-q"+qi}
+                          checked={selected===choice} onChange={()=>answer(activeModule,qi,choice)}/>
+                        <span>{option}</span>
+                      </label>)}
+                  </div>
+                  {selected>=0 && <p role="status" className={"mt-3 rounded-lg px-4 py-3 text-sm leading-6 " +
+                    (correct?"bg-[#edf6ed] text-[#28643c]":"bg-[#fff1e9] text-[#92462e]")}>
+                    <strong>{correct?"Richtig!":"Noch nicht ganz."}</strong> {correct?question.explanation:"Überlege, was du selbst erkennen und übernehmen kannst. Du darfst die Antwort jederzeit ändern."}
                   </p>}
                 </fieldset>;
-              })}</div>
-              {currentLesson.hasPlan && <div className="mt-7">
-                <label htmlFor="wenn-dann-plan" className="block text-sm font-medium">2. Wie lautet dein Wenn-Dann-Plan für diesen Kurs?</label>
-                <textarea id="wenn-dann-plan" value={planDraft} onChange={e=>setPlanDraft(e.target.value)} rows={3}
-                  placeholder="Wenn …, dann nehme ich mir … Zeit für MITTRAGEN." className="mt-3 w-full rounded-xl border border-[#D8D0C5] bg-[#F8F4EE] p-4 text-sm focus:outline-[#C4532B]"/>
-                <button type="button" disabled={!planDraft.trim() || progress.plan===planDraft.trim()} onClick={savePlan}
-                  className="mt-3 rounded-lg bg-[#1B2B3C] px-5 py-3 text-xs font-medium text-white disabled:opacity-50">{progress.plan.trim()?"Plan aktualisieren":"Plan speichern"}</button>
-                {progress.plan.trim() && <p className="mt-3 text-xs text-[#276541]"><Check size={14} className="mr-1 inline"/> Plan gespeichert – nur in diesem Browser.</p>}
-              </div>}
-              {currentQuizDone ? <div className="mt-7 rounded-xl bg-[#ECF7EE] p-5">
-                <p className="flex items-center gap-2 text-sm font-medium text-[#276541]"><CheckCircle2 size={18}/> Video {active+1} und Kontrollfragen abgeschlossen.</p>
-                {active<LESSONS.length-1 && <button type="button" onClick={()=>chooseLesson(active+1)} className="mt-4 inline-flex items-center gap-2 rounded-lg bg-[#C4532B] px-5 py-3 text-sm font-medium text-white">Weiter zu Video {active+2} <ArrowRight size={17}/></button>}
-              </div> : <p className="mt-5 text-xs text-[#657079]">Beantworte die Fragen richtig, um zum nächsten Video zu gelangen.</p>}
-            </div>}
+              })}
+            </div>
+            {passed ? <div className="mt-6 rounded-xl bg-[#edf6ed] p-5">
+              <p className="flex items-center gap-2 text-base font-semibold text-[#28643c]"><CheckCircle2 size={20}/> Modultest bestanden!</p>
+              <p className="mt-2 text-sm leading-6">Du hast alle Kontrollfragen richtig beantwortet. Alle anderen Module sind und bleiben frei zugänglich.</p>
+            </div> : <p className="mt-5 text-sm leading-6 text-[#657079]">
+              Alle Module bleiben offen – auch wenn dein Testergebnis noch nicht vollständig ist.
+            </p>}
+            <div className="mt-7 flex flex-wrap items-center justify-between gap-3">
+              <button type="button" onClick={()=>resetQuiz(activeModule)}
+                className="inline-flex min-h-11 items-center gap-2 rounded-lg border border-[#d6cec4] px-4 text-xs font-semibold hover:bg-[#f5efe7]">
+                <RefreshCcw size={15}/> Test neu starten
+              </button>
+              {activeModule<COURSE.length-1 && <button type="button" onClick={()=>selectModule(activeModule+1)}
+                className="inline-flex min-h-11 items-center gap-2 rounded-lg bg-[#c94e28] px-4 text-xs font-semibold text-white hover:bg-[#a94222]">
+                Weiter zu Modul {String(activeModule+2).padStart(2,"0")} <ArrowRight size={16}/>
+              </button>}
+            </div>
+          </section>}
+
+          <section className="rounded-2xl border border-[#e2dad0] bg-[#f1e9dd] p-5 sm:p-7">
+            <p className="text-xs font-semibold uppercase tracking-[.16em] text-[#b34829]">Deine Aufgabe für den Alltag</p>
+            <h3 className="mt-2 text-xl font-semibold">Jetzt übernimmst du.</h3>
+            <p className="mt-3 text-sm leading-7">{module.practice}</p>
+            <label className="mt-5 flex cursor-pointer items-start gap-3 text-sm font-medium">
+              <input type="checkbox" checked={progress.practices[activeModule]}
+                onChange={()=>togglePractice(activeModule)}
+                className="mt-0.5 h-4 w-4 shrink-0 accent-[#c94e28]"/>
+              <span>{progress.practices[activeModule]?"Als umgesetzt markiert.":"Ich habe diese Aufgabe selbst umgesetzt."}</span>
+            </label>
+            <p className="mt-3 text-xs leading-6 text-[#6d777e]">Für den offenen Test optional. Deine ehrliche Umsetzung zählt – nicht eine Bestätigung durch Lena.</p>
           </section>
-
-          {LESSONS.every((_,i)=>quizComplete(progress,i)) && <section className="rounded-2xl border border-[#E2DAD0] bg-white p-6 md:p-8">
-            <p className="text-xs uppercase tracking-[.15em] text-[#C4532B]">Aufgabe der Woche</p>
-            <h3 className="mt-2 text-2xl font-medium">Jetzt bist du dran.</h3>
-            <p className="mt-5 rounded-xl bg-[#F8F4EE] p-5 text-sm leading-7">{TASK}</p>
-            <button type="button" disabled={progress.taskDone} onClick={()=>update(p=>({...p,taskDone:true}))}
-              className="mt-5 inline-flex items-center gap-2 rounded-lg bg-[#C4532B] px-5 py-3 text-sm text-white disabled:opacity-65"><Check size={17}/> {progress.taskDone?"Aufgabe erledigt ✓":"Aufgabe erledigt"}</button>
-          </section>}
-
-          {finished && <section className="rounded-2xl bg-[#1B2B3C] p-7 text-white md:p-8">
-            <CheckCircle2 size={30} className="text-[#E58C66]"/>
-            <h3 className="mt-3 text-3xl font-medium">Modul geschafft.</h3>
-            <p className="mt-2 text-sm text-white/75">Modul 2 ist jetzt freigeschaltet.</p>
-            <button type="button" onClick={()=>setOpenedModule(1)} className="mt-5 inline-flex items-center gap-2 rounded-lg bg-[#C4532B] px-5 py-3 text-sm text-white">Weiter zu Modul 2 <ArrowRight size={17}/></button>
-          </section>}
-        </div>}
+          <div className="flex flex-wrap items-center justify-between gap-3 pt-2">
+            <a href="/" className="inline-flex items-center gap-2 text-xs font-semibold hover:text-[#c94e28]"><ArrowLeft size={16}/> Zur Startseite</a>
+            <button type="button" onClick={()=>setActiveStep(quizStep)}
+              className="inline-flex items-center gap-2 text-xs font-semibold text-[#ad4627] hover:underline">
+              Zum Kontrolltest <ArrowRight size={16}/>
+            </button>
+          </div>
+        </div>
       </div>
-      {!hydrated && <span className="sr-only">Fortschritt wird geladen.</span>}
     </main>
-    <footer className="border-t border-[#E0D8CE] px-6 py-7 text-center text-xs text-[#66717A]">MITTRAGEN · <a href="mailto:kontakt@flottiki.de" className="underline">Kontakt</a> · <a href="/impressum" className="underline">Impressum</a></footer>
+    <footer className="border-t border-[#dfd8cf] bg-[#162639] px-6 py-8 text-center text-xs text-white/75">
+      MITTRAGEN · Offene Testphase · <a href="/impressum" className="underline underline-offset-4">Impressum</a>
+    </footer>
   </div>;
 }
