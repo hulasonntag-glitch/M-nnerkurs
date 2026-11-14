@@ -5,9 +5,12 @@
  * Für die Video-Produktion weiterhin eigene Avatar-MP4s mit Tom und Lena einsetzen.
  */
 import { COURSE as BASE_COURSE, type CourseModule, type Lesson, type Question } from "./course";
+import { MODULE_ONE } from "./moduleOne";
 
 export type LearningSource = { label: string; url: string };
-export type LearningDetails = { knowledge: string[]; steps: string[]; sources: LearningSource[] };
+export type LearningChallenge = { prompt: string; options: [string,string,string]; correct: 0|1|2; explanation: string };
+export type DialogueLine = { speaker: "Tom"|"Lena"|"Sprecher"; text: string };
+export type LearningDetails = { knowledge: string[]; steps: string[]; sources: LearningSource[]; durationMinutes?: number; dialogue?: DialogueLine[]; challenge?: LearningChallenge };
 export type LearningLesson = Lesson & LearningDetails;
 export type LearningModule = Omit<CourseModule,"lessons"|"quiz"> & {
   lessons: LearningLesson[];
@@ -359,7 +362,7 @@ const EXTRA_QUIZ: Question[][] = [
   ],
 ];
 
-export const COURSE: LearningModule[] = BASE_COURSE.map((module,m)=>({
+const STANDARD_COURSE: LearningModule[] = BASE_COURSE.map((module,m)=>({
   ...module,
   lessons: [
     ...module.lessons.map((lesson,i)=>({
@@ -370,3 +373,6 @@ export const COURSE: LearningModule[] = BASE_COURSE.map((module,m)=>({
   ],
   quiz: [...module.quiz,...(EXTRA_QUIZ[m] ?? [])],
 }));
+
+/** Die ausführlich ausgearbeitete Schwangerschaftsversion ersetzt den früheren Demo-Inhalt; alle anderen Module bleiben offen. */
+export const COURSE: LearningModule[] = STANDARD_COURSE.map((module,index)=>index===0?MODULE_ONE:module);
