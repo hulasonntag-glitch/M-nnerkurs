@@ -50,14 +50,14 @@ function Cta({children,href="/kurs",quiet=false}:{children:React.ReactNode;href?
 function HomePage() {
   const [menuOpen,setMenuOpen] = useState(false);
   const [openFaq,setOpenFaq] = useState<number|null>(null);
-  const links = [["#problem","Der Gedanke"],["#kurs","Der Kurs"],["#ablauf","Ablauf"],["#verschenken","Verschenken"],["#faq","FAQ"]];
+  const links = [["#problem","Der Gedanke"],["#kurs","Der Kurs"],["/kurs#inhaltsverzeichnis","Inhaltsverzeichnis"],["#ablauf","Ablauf"],["#verschenken","Verschenken"],["#faq","FAQ"]];
   return <div className="mittragen-home screenshot-match min-h-screen bg-[#faf7f0] font-sans text-[#162639]">
 
     <header className="relative z-20 border-b border-[#e7dfd4] bg-[#faf7f0]">
       <div className="mx-auto flex h-[62px] max-w-6xl items-center justify-between px-5 sm:px-6 lg:h-16 lg:px-8">
         <Brand href="/" />
         <nav aria-label="Hauptnavigation" className="hidden items-center gap-7 md:flex">{links.map(([href,text])=><a key={href} href={href} className="text-xs font-semibold hover:text-[#c94e28]">{text}</a>)}</nav>
-        <a href="/kurs" className="hidden items-center gap-4 bg-[#162639] px-5 py-3 text-[11px] font-medium text-white md:inline-flex">Kurs entdecken <ArrowRight size={14}/></a>
+        <a href="/kurs#inhaltsverzeichnis" className="hidden items-center gap-4 bg-[#162639] px-5 py-3 text-[11px] font-medium text-white md:inline-flex">Inhaltsverzeichnis <ArrowRight size={14}/></a>
         <button type="button" className="p-2 md:hidden" aria-label={menuOpen?"Menü schließen":"Menü öffnen"} aria-expanded={menuOpen} onClick={()=>setMenuOpen(!menuOpen)}>{menuOpen?<X/>:<Menu/>}</button>
       </div>
       {menuOpen&&<nav aria-label="Mobile Navigation" className="flex flex-col border-t border-[#e7dfd4] bg-[#faf7f0] px-6 py-3 md:hidden">{[...links,["/kurs","Zum Kurs"]].map(([href,text])=><a key={href} href={href} onClick={()=>setMenuOpen(false)} className="px-2 py-3 text-sm font-semibold">{text}</a>)}</nav>}
