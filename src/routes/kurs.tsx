@@ -3,7 +3,7 @@ import { useEffect, useState } from "react";
 import {
   ArrowLeft, ArrowRight, Baby, BookOpen, Check, CheckCircle2, ChevronRight,
   Circle, ClipboardCheck, Film, Heart, LockOpen, MessageCircle, PlayCircle,
-  RefreshCcw, Video, type LucideIcon,
+  RefreshCcw, Video, List, type LucideIcon,
 } from "lucide-react";
 import { Brand } from "../components/Brand";
 import { COURSE } from "../data/professionalCourse";
@@ -73,6 +73,20 @@ function CoursePage() {
 
   useEffect(() => {
     try {
+      const params = new URLSearchParams(window.location.search);
+      const m = Number(params.get("modul"));
+      if (Number.isInteger(m) && m>=1 && m<=COURSE.length) {
+        setActiveModule(m-1);
+        const requestedStep = Number(params.get("einheit"));
+        const step = params.get("test")==="1" ? COURSE[m-1]!.lessons.length :
+          Number.isInteger(requestedStep) && requestedStep>=1 && requestedStep<=COURSE[m-1]!.lessons.length ? requestedStep-1 : 0;
+        setActiveStep(step);
+      }
+    } catch { /* Ungültige URL-Parameter ignorieren. */ }
+  }, []);
+
+  useEffect(() => {
+    try {
       const current = window.localStorage.getItem(STORAGE_KEY);
       const saved = current ?? window.localStorage.getItem(PREVIOUS_V2) ?? window.localStorage.getItem(PREVIOUS_KEY);
       if (saved) setProgress(restoreProgress(JSON.parse(saved), current === null));
@@ -98,6 +112,23 @@ function CoursePage() {
     setActiveModule(index);
     setActiveStep(0);
     window.scrollTo?.({top: 0, behavior: "smooth"});
+  };
+  const navigateToLesson = (moduleIndex: number, stepIndex: number) => {
+    setActiveModule(moduleIndex);
+    setActiveStep(stepIndex);
+    // Die URL enthält nur die Kursposition, nicht den persönlichen Lernfortschritt.
+    window.history.replaceState(null, "", `/kurs?modul=${moduleIndex+1}&einheit=${stepIndex+1}#lektion`);
+    window.requestAnimationFrame(() => {
+      document.getElementById("lektion")?.scrollIntoView({behavior:"smooth",block:"start"});
+    });
+  };
+  const navigateToQuiz = (moduleIndex: number) => {
+    setActiveModule(moduleIndex);
+    setActiveStep(COURSE[moduleIndex]!.lessons.length);
+    window.history.replaceState(null, "", `/kurs?modul=${moduleIndex+1}&test=1#lektion`);
+    window.requestAnimationFrame(() => {
+      document.getElementById("lektion")?.scrollIntoView({behavior:"smooth",block:"start"});
+    });
   };
   const markReviewed = (m: number, v: number) => {
     setProgress(old => ({
@@ -157,7 +188,76 @@ function CoursePage() {
         <p className="mt-3 text-sm font-medium text-[#162639]">
           Hier lernst du als Mann, konkrete Verantwortung zu übernehmen. Deine Partnerin muss dich dabei nicht unterrichten oder kontrollieren.
         </p>
+        <a href="#inhaltsverzeichnis" className="mt-5 inline-flex min-h-11 items-center gap-2 rounded-lg bg-[#162639] px-4 py-3 text-sm font-semibold text-white hover:bg-[#2b4359]"><List size={18}/> Gesamtes Inhaltsverzeichnis ansehen <ArrowRight size={16}/></a>
       </div>
+
+      <section id="inhaltsverzeichnis" className="mb-8 scroll-mt-8 rounded-2xl border border-[#e1d9ce] bg-white p-5 sm:p-8" aria-labelledby="inhaltsverzeichnis-title">
+        <div className="flex flex-wrap items-start justify-between gap-4">
+          <div>
+            <p className="inline-flex items-center gap-2 text-xs font-semibold uppercase tracking-[.14em] text-[#b74f2c]"><List size={17}/> Dein kompletter Überblick</p>
+            <h2 id="inhaltsverzeichnis-title" className="mt-3 text-2xl font-semibold tracking-tight sm:text-3xl">Inhaltsverzeichnis</h2>
+            <p className="mt-3 max-w-2xl text-sm leading-7 text-[#606b74]">
+              Erst das emotionale Willkommen, dann die Wissensmodule. Hier findest du alle geplanten Inhalte
+              und kannst direkt in jede Lerneinheit springen. Die Videos entstehen mit HeyGen und Claude;
+              die Texte sind schon als Testfassung verfügbar.
+            </p>
+          </div>
+          <span className="rounded-full bg-[#f5e8da] px-3 py-2 text-xs font-semibold text-[#a44729]">6 Module · offen</span>
+        </div>
+        <div className="mt-6 rounded-xl border border-[#d7dfea] bg-[#eef2f6] p-4 sm:p-5">
+          <div className="flex items-start gap-3">
+            <Heart size={22} className="mt-1 shrink-0 text-[#be5835]"/>
+            <div className="min-w-0">
+              <p className="text-xs font-semibold uppercase tracking-widest text-[#6b7783]">Auftakt · vor Modul 01</p>
+              <h3 className="mt-1 text-lg font-semibold">Video 00 – Du bist jetzt schon Vater.</h3>
+              <p className="mt-2 text-sm leading-6 text-[#4e606f]">
+                Das emotionale Willkommensvideo: Freude, Vorfreude und deine neue Rolle als werdender Vater.
+                <strong> Es ist kein zusätzliches Fachvideo in Modul 01.</strong>
+              </p>
+              <p className="mt-2 text-xs text-[#697a88]">Drehbuch vorbereitet · Video noch nicht eingebunden</p>
+            </div>
+          </div>
+        </div>
+        <div className="mt-4 grid gap-3">
+          {COURSE.map((item,m)=>{
+            const completed = correctCount(progress,m)===item.quiz.length;
+            const seenCount = item.lessons.filter((_,i)=>progress.reviewed[m]?.[i]).length;
+            return <details key={item.title} className="group rounded-xl border border-[#e5ddd2] bg-[#fffdf8]" open={m===0}>
+              <summary className="flex cursor-pointer list-none items-center gap-3 px-4 py-4 marker:hidden sm:px-5">
+                <span className="shrink-0 text-sm font-semibold tabular-nums text-[#bd5934]">{String(m+1).padStart(2,"0")}</span>
+                <span className="min-w-0 flex-1">
+                  <span className="block text-sm font-semibold">{item.title}</span>
+                  <span className="mt-1 block text-xs leading-5 text-[#728089]">{item.lessons.length} Lerneinheiten · {seenCount} gelesen · {item.quiz.length} Kontrollfragen</span>
+                </span>
+                {completed && <CheckCircle2 size={18} className="shrink-0 text-[#39845d]"/>}
+                <ChevronRight size={19} className="shrink-0 text-[#b74f2c] transition-transform group-open:rotate-90"/>
+              </summary>
+              <ol className="border-t border-[#e9e1d7] px-4 py-2 sm:px-5">
+                {item.lessons.map((unit,i)=><li key={unit.title}>
+                  <button type="button" onClick={()=>navigateToLesson(m,i)}
+                    className="flex w-full items-start gap-3 rounded-lg px-2 py-3 text-left hover:bg-[#f5eee6] focus-visible:outline-2 focus-visible:outline-[#c94e28]">
+                    <span className="shrink-0 text-xs font-semibold tabular-nums text-[#af6747]">{m+1}.{String(i+1).padStart(2,"0")}</span>
+                    <span className="min-w-0 flex-1">
+                      <span className="block text-sm font-medium">{unit.title}</span>
+                      <span className="mt-1 block text-xs leading-5 text-[#748089]">{unit.objective}</span>
+                    </span>
+                    {progress.reviewed[m]?.[i]?<CheckCircle2 size={17} className="shrink-0 text-[#39845d]"/>:<ArrowRight size={16} className="shrink-0 text-[#a94a2b]"/>}
+                  </button>
+                </li>)}
+                <li className="border-t border-[#eee5d8]">
+                  <button type="button" onClick={()=>navigateToQuiz(m)}
+                    className="flex w-full items-center gap-3 rounded-lg px-2 py-4 text-left hover:bg-[#f5eee6]">
+                    <ClipboardCheck size={18} className="shrink-0 text-[#b34c2a]"/>
+                    <span className="flex-1 text-sm font-semibold">Abschlusstest · {item.quiz.length} Fragen für dich</span>
+                    <ArrowRight size={16} className="text-[#b34c2a]"/>
+                  </button>
+                </li>
+              </ol>
+            </details>;
+          })}
+        </div>
+        <p className="mt-5 text-xs leading-6 text-[#727c83]">Inhalte: redaktionelle Testfassung. Bei medizinischen Themen steht die fachliche Freigabe noch aus. Alle Module bleiben frei zugänglich.</p>
+      </section>
 
       <div className="grid items-start gap-6 lg:grid-cols-[285px_minmax(0,1fr)] lg:gap-8">
         <aside className="rounded-2xl border border-[#e2dad0] bg-white p-4 sm:p-5 lg:sticky lg:top-5" aria-label="Kursübersicht">
@@ -232,7 +332,7 @@ function CoursePage() {
             </div>
           </section>
 
-          {lesson && <section key={activeModule+"-"+activeStep} className="rounded-2xl border border-[#e2dad0] bg-white p-5 sm:p-8">
+          {lesson && <section id="lektion" key={activeModule+"-"+activeStep} className="rounded-2xl border border-[#e2dad0] bg-white p-5 sm:p-8">
             <p className="text-xs font-semibold uppercase tracking-[.16em] text-[#c4532b]">
               LERNEINHEIT {activeStep+1} VON {module.lessons.length}
             </p>
@@ -325,7 +425,7 @@ function CoursePage() {
             </div>
           </section>}
 
-          {onQuiz && <section className="rounded-2xl border border-[#e2dad0] bg-white p-5 sm:p-8" aria-labelledby="quiz-title">
+          {onQuiz && <section id="lektion" className="rounded-2xl border border-[#e2dad0] bg-white p-5 sm:p-8" aria-labelledby="quiz-title">
             <p className="text-xs font-semibold uppercase tracking-[.16em] text-[#c4532b]">KONTROLLFRAGEN · MODUL {String(activeModule+1).padStart(2,"0")}</p>
             <h3 id="quiz-title" className="mt-2 text-2xl font-semibold tracking-tight sm:text-3xl">Was hast du verstanden?</h3>
             <p className="mt-3 text-sm leading-7 text-[#657079]">
